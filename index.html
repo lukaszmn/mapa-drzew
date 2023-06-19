@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>Warszawska mapa drzew</title>
+
+	<style>
+		:root { --copy: white; }
+		body { font-family: sans-serif; }
+		html, body { height: 100%; margin: 0; padding: 0; }
+		#top { width: 100%; height: 100%; display: flex; flex-direction: column; }
+		#toolbar { display: flex; align-items: center; margin: 0 16px; }
+		h1 { font-size: 1em; font-weight: bold; flex: 1; }
+		#map { flex: 1; }
+		#footer { display: flex; margin: 12px 16px; }
+		#footer-name { flex: 1; }
+		.MV_COPYRIGHT { color: var(--copy); }
+		.label { color: var(--copy); text-wrap: nowrap; }
+		.tree-marker { width: 24px; height: 24px; border: 2px solid yellow; border-radius: 50%; box-sizing: content-box; }
+	</style>
+</head>
+<body>
+
+<div id="top">
+	<div id="toolbar">
+		<h1 id="title">Warszawska mapa drzew</h1>
+		<span id="options">
+			<input type="checkbox" onclick="setLayerVisible(this)" checked id="orto" />
+			<label for="orto">Ortofotomapa</label>
+		</span>
+	</div>
+	<div id="map"></div>
+	<div id="footer">
+		<span id="footer-name"></span>
+		<span id="footer-data"></span>
+	</div>
+</div>
+
+<script src='https://mapa.um.warszawa.pl/mapviewer/fsmc/jslib/oraclemaps.js'></script>
+
+<script>
+const COORD_GPS = 8307;
+const COORD_WAW = 2178;
+MVMapView.enableCodingHints(false);
+const mapview = new MVMapView(document.getElementById('map'), 'https://mapa.um.warszawa.pl/mapviewer');
+
+mapview.addCopyRightNote('Mapa i dane &copy; Urząd m.st. Warszawy');
+
+const tiles = 'https://mapa.um.warszawa.pl/mapviewer/mcserver';
+const mapVector = new MVMapTileLayer('dane_wawa.SZYBKA_PODKLAD_WEKTOR', tiles);
+const mapOrto = new MVMapTileLayer('dane_wawa.SZYBKA_PODKLAD_ORTO', tiles);
+mapview.addMapTileLayer(mapVector);
+mapview.addMapTileLayer(mapOrto);
+mapVector.setVisible(false);
+
+mapview.setCenter(MVSdoGeometry.createPoint(21.00330,52.22878,COORD_GPS));
+mapview.setZoomLevel(19);
+mapview.addNavigationPanel('WEST', false);
+mapview.addMapDecoration(new MVMapDecoration(new MVScaleBar({format:'METRIC'}),0,1,null,null,10,-20));
+
+const poi = new MVThemeBasedFOI('poi', 'dane_wawa.BOS_ZIELEN_DRZEWA', 'https://mapa.um.warszawa.pl/mapviewer/foi');
+poi.setMinVisibleZoomLevel(10);
+poi.setMaxWholeImageLevel(18);
+poi.setMouseCursorStyle('pointer');
+poi.setClickable(true);
+mapview.addThemeBasedFOI(poi);
+mapview.display();
+
+let selectedTreeMarker;
+poi.attachEventListener(MVEvent.MOUSE_CLICK, (_, x) => {
+	let name, data;
+	try {
+		name = x.name.match(/^Nazwa polska: (.+)/m)[1];
+		let m = x.name.match(/^Wysokość w m: (\d+)/m);
+
+		data = '';
+		if (m) {
+			const height = +m[1];
+			data = `h ${height} m`;
+		}
+		m = x.name.match(/^Obwód pnia w cm: (\d+)/m);
+		if (m) {
+			const diameter = Math.round(+m[1] / 3.14);
+			if (data) data += ', ';
+			data += `𝝓 ${diameter} cm`;
+		}
+	} catch (e) {
+		console.log(e);
+		name = x.name;
+	}
+	document.getElementById('footer-name').innerText = name;
+	document.getElementById('footer-data').innerText = data;
+	console.log(x);
+
+	const loc = MVSdoGeometry.createPoint(x.x, x.y, COORD_WAW);
+	if (!selectedTreeMarker) {
+		selectedTreeMarker = MVFOI.createHTMLFOI('selected-tree', loc, '<div class="tree-marker"></div>', -10, -10);
+		mapview.addFOI(selectedTreeMarker);
+		mapview.setCenter(loc);
+	} else
+		selectedTreeMarker.updateGeometry(loc);
+});
+
+const foiLabels = new Set();
+poi.attachEventListener(MVEvent.AFTER_REFRESH, () => {
+	const data = poi.getFOIData();
+	if (!data) return;
+	for (const el of data) {
+		if (foiLabels.has(el.id)) continue;
+		foiLabels.add(el.id);
+
+		const m = el.name.match(/^Nazwa polska: (.+)/m);
+		if (!m) continue;
+		const text = m[1];
+		if (text.startsWith('**')) continue;
+		const parts = text.split(' ');
+		const text2 = parts.length == 1 ? text.substring(0, 3) : parts[0].substring(0, 3) + ' ' + parts[1].substring(0, 3);
+		const html = `<span class="label">${text2}</span>`;
+		const loc = MVSdoGeometry.createPoint(el.x, el.y, COORD_WAW);
+		userMarker = MVFOI.createHTMLFOI(el.id, loc, html, 10, 0);
+		mapview.addFOI(userMarker);
+	}
+});
+
+
+if (navigator.geolocation)
+	navigator.geolocation.watchPosition(userLocation);
+
+let userMarker;
+function userLocation(position) {
+	const loc = MVSdoGeometry.createPoint(position.coords.longitude, position.coords.latitude, COORD_GPS);
+	if (!userMarker) {
+		userMarker = MVFOI.createMarkerFOI('user-loc', loc, 'marker.png', 25, 82);
+		mapview.addFOI(userMarker);
+		mapview.setCenter(loc);
+	} else
+		userMarker.updateGeometry(loc);
+}
+
+function setLayerVisible(checkBox) {
+	const root = document.querySelector(':root');
+	if (checkBox.checked) {
+		mapVector.setVisible(false);
+		mapOrto.setVisible(true);
+		root.style.setProperty('--copy', 'white');
+	} else {
+		mapVector.setVisible(true);
+		mapOrto.setVisible(false);
+		root.style.setProperty('--copy', 'black');
+	}
+}
+
+</script>
+
+</body>
+</html>
