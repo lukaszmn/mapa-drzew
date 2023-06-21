@@ -151,22 +151,23 @@ const TreeSelector = {
 		// alert(x);
 		// console.log(x);
 		const originalName = x.originalName;
-		let name, data;
+		if (!originalName)
+			return;
+		let name = originalName;
+		let data = [];
 		try {
 			name = originalName.match(/^Nazwa polska: (.+)/m)[1];
-			data = '';
 
 			let m = originalName.match(/^Wysokość w m: (\d+)/m);
 			if (m) {
 				const height = +m[1];
-				data = `h ${height} m`;
+				data.push(`↟ ${height} m`);
 			}
 
 			m = originalName.match(/^Obwód pnia w cm: (\d+)/m);
 			if (m) {
 				const diameter = Math.round(+m[1] / 3.14);
-				if (data) data += ', ';
-				data += `𝝓 ${diameter} cm`;
+				data.push(`𝝓 ${diameter} cm`);
 			}
 
 			m = originalName.match(/^Aktualność danych.*?(\d{4})/m);
@@ -182,18 +183,16 @@ const TreeSelector = {
 				else
 					data1 = `${yearsAgo} lat temu`;
 
-				if (data)
-					data = `${data1}, ${data}`;
-				else
-					data = data1;
+				data.splice(0, 0, data1);
 			}
 
 		} catch (e) {
 			console.log(e);
-			name = originalName;
 		}
 		document.getElementById('footer-name').innerText = name;
-		document.getElementById('footer-data').innerText = data;
+		document.getElementById('footer-data').innerHTML = data
+			.map(s => `<div class=footer-item>${s}</div>`)
+			.join('');
 
 		const loc = MVSdoGeometry.createPoint(x.x, x.y, COORD_WAW);
 		if (!this._selectedTreeMarker) {
