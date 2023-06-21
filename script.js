@@ -156,7 +156,13 @@ const TreeSelector = {
 		let name = originalName;
 		let data = [];
 		try {
-			name = originalName.match(/^Nazwa polska: (.+)/m)[1];
+			const fullName = originalName.match(/^Nazwa polska: (.+)/m)[1];
+			const nameBeforeQuotes = fullName.replace(/'.*/, '').trim();
+			const nameAfterQuotes = fullName.replace(/^[^']+/, '').trim();
+			const getUrl = s => 'https://www.google.pl/search?q=' + encodeURIComponent(s);
+			name = `<a href="${getUrl(nameBeforeQuotes)}" target=_blank>${nameBeforeQuotes}</a>`;
+			if (nameAfterQuotes)
+				name += ` <a href="${getUrl(fullName)}" target=_blank>${nameAfterQuotes}</a>`;
 
 			let m = originalName.match(/^Wysokość w m: (\d+)/m);
 			if (m) {
@@ -189,7 +195,7 @@ const TreeSelector = {
 		} catch (e) {
 			console.log(e);
 		}
-		document.getElementById('footer-name').innerText = name;
+		document.getElementById('footer-name').innerHTML = name;
 		document.getElementById('footer-data').innerHTML = data
 			.map(s => `<div class=footer-item>${s}</div>`)
 			.join('');
