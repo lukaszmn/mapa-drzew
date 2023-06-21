@@ -95,16 +95,19 @@ const TreeLabels = {
 
 		for (const el of this.data) {
 
-			if (this._foiLabels.has(el.id))
-				continue;
-			this._foiLabels.add(el.id);
-
 			const m = el.name.match(/^Nazwa polska: (.+)/m);
 			if (!m)
 				continue;
-			const text = m[1];
+			const text = m[1].replace(/["']/g, '');
 			if (text.startsWith('**'))
 				continue;
+
+			el.originalName = el.name;
+			el.name = text;
+
+			if (this._foiLabels.has(el.id))
+				continue;
+			this._foiLabels.add(el.id);
 
 			const parts = text.split(' ');
 			const text2 = parts.length == 1 ? text.substring(0, 3) : parts[0].substring(0, 3) + ' ' + parts[1].substring(0, 3);
@@ -141,31 +144,32 @@ const TreeSelector = {
 
 	start: function() {
 		const that = this;
-		UIMap.treesLayer.attachEventListener(MVEvent.MOUSE_CLICK, function(_, x) { that.selectTree(x); });
+		UIMap.treesLayer.attachEventListener(MVEvent.MOUSE_CLICK, (_, x) => this.selectTree(x));
 	},
 
 	selectTree: function(x) {
 		// alert(x);
 		// console.log(x);
+		const originalName = x.originalName;
 		let name, data;
 		try {
-			name = x.name.match(/^Nazwa polska: (.+)/m)[1];
+			name = originalName.match(/^Nazwa polska: (.+)/m)[1];
 			data = '';
 
-			let m = x.name.match(/^Wysokość w m: (\d+)/m);
+			let m = originalName.match(/^Wysokość w m: (\d+)/m);
 			if (m) {
 				const height = +m[1];
 				data = `h ${height} m`;
 			}
 
-			m = x.name.match(/^Obwód pnia w cm: (\d+)/m);
+			m = originalName.match(/^Obwód pnia w cm: (\d+)/m);
 			if (m) {
 				const diameter = Math.round(+m[1] / 3.14);
 				if (data) data += ', ';
 				data += `𝝓 ${diameter} cm`;
 			}
 
-			m = x.name.match(/^Aktualność danych.*?(\d{4})/m);
+			m = originalName.match(/^Aktualność danych.*?(\d{4})/m);
 			if (m) {
 				const yearsAgo = this._thisYear - +m[1];
 				let data1;
@@ -186,7 +190,7 @@ const TreeSelector = {
 
 		} catch (e) {
 			console.log(e);
-			name = x.name;
+			name = originalName;
 		}
 		document.getElementById('footer-name').innerText = name;
 		document.getElementById('footer-data').innerText = data;
